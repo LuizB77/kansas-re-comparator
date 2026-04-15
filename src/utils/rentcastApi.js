@@ -1,55 +1,54 @@
-const RENTCAST_MARKETS = 'https://api.rentcast.io/v1/markets'
+const MOCK_DATA = {
+  '66606': { medianSalePrice: 142000, medianRent: 895 },
+  '66614': { medianSalePrice: 198000, medianRent: 1050 },
+  '66044': { medianSalePrice: 187000, medianRent: 975 },
+  '67202': { medianSalePrice: 165000, medianRent: 920 },
+  '67212': { medianSalePrice: 210000, medianRent: 1100 },
+  '66101': { medianSalePrice: 125000, medianRent: 780 },
+  '66062': { medianSalePrice: 285000, medianRent: 1350 },
+  '66213': { medianSalePrice: 320000, medianRent: 1475 },
+  '66502': { medianSalePrice: 155000, medianRent: 850 },
+  '67401': { medianSalePrice: 148000, medianRent: 870 },
+}
+
+function buildPriceHistory(medianSalePrice) {
+  const basePrice = medianSalePrice * 0.94
+  const now = new Date()
+  const year = now.getFullYear()
+  const month = now.getMonth()
+  const priceHistory = []
+  for (let i = 0; i < 12; i++) {
+    const price = Math.round(basePrice + (i * (medianSalePrice - basePrice)) / 11)
+    const date = new Date(year, month - (11 - i), 1).toISOString().split('T')[0]
+    priceHistory.push({ date, price })
+  }
+  return priceHistory
+}
 
 export async function fetchRentcastData(zip) {
-  const apiKey = import.meta.env.VITE_RENTCAST_KEY
-  const params = new URLSearchParams({
-    zipCode: String(zip),
-    historyMonths: '12',
-  })
-  const url = `${RENTCAST_MARKETS}?${params.toString()}`
+  await Promise.resolve()
 
-  try {
-    const res = await fetch(url, {
-      headers: {
-        'X-Api-Key': apiKey,
-      },
-    })
-    if (!res.ok) {
-      const body = await res.text()
-      throw new Error(
-        body ? `${res.status} ${res.statusText}: ${body}` : res.statusText || `HTTP ${res.status}`,
-      )
-    }
-    const response = await res.json()
+  const zipKey = String(zip).padStart(5, '0')
+  const mock = MOCK_DATA[zipKey]
 
-    const medianSalePrice =
-      response.averageSalePrice !== undefined && response.averageSalePrice !== null
-        ? Number(response.averageSalePrice)
-        : null
-    const medianRent =
-      response.averageRent !== undefined && response.averageRent !== null
-        ? Number(response.averageRent)
-        : null
+  let medianSalePrice
+  let medianRent
 
-    const rawHistory = response.saleData?.history
-    let priceHistory = []
-    if (rawHistory && typeof rawHistory === 'object' && !Array.isArray(rawHistory)) {
-      priceHistory = Object.entries(rawHistory).map(([date, entry]) => {
-        const value =
-          entry && typeof entry === 'object' && 'value' in entry ? Number(entry.value) : NaN
-        return { date, price: value }
-      })
-      priceHistory = priceHistory.filter((item) => Number.isFinite(item.price))
-      priceHistory.sort((a, b) => a.date.localeCompare(b.date))
-    }
+  if (mock) {
+    medianSalePrice = mock.medianSalePrice
+    medianRent = mock.medianRent
+  } else {
+    const digits = parseInt(String(zip).replace(/\D/g, ''), 10)
+    const seed = Number.isFinite(digits) ? digits % 1000 : 0
+    medianSalePrice = 120000 + seed * 180
+    medianRent = Math.round(700 + seed * 0.6)
+  }
 
-    return {
-      medianSalePrice: Number.isFinite(medianSalePrice) ? medianSalePrice : null,
-      medianRent: Number.isFinite(medianRent) ? medianRent : null,
-      priceHistory,
-    }
-  } catch (e) {
-    const message = e instanceof Error ? e.message : String(e)
-    throw new Error(`RentCast API error for ZIP ${zip}: ${message}`)
+  const priceHistory = buildPriceHistory(medianSalePrice)
+
+  return {
+    medianSalePrice,
+    medianRent,
+    priceHistory,
   }
 }
